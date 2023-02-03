@@ -1,6 +1,18 @@
+from enum import Enum
 import socket
 import sys
 import threading
+import os
+
+SERVER_DATA_PATH = "server_data/"
+EMPTY_DIRECTORY = "Server directory is empty!"
+
+class COMMAND(Enum):
+    LIST="LIST"
+    PUSH="PUSH"
+    DELETE="DELETE"
+    OVERWRITE="OVERWRITE"
+    EXIT="EXIT"
 
 class ServerThread (threading.Thread):
     threadID: int
@@ -13,21 +25,32 @@ class ServerThread (threading.Thread):
         self.name = name
         self.client_socket = client_socket
 
-    def handle_connection(self):
-        # Receive the data in small chunks and retransmit it
-        while True:
-            data = self.client_socket.recv(16)
-            print('received {!r}'.format(data))
-            if data:
-                print('sending data back to the client')
-                self.client_socket.sendall(data)
-            else:
-                print('no data from', self.client_socket)
-                break
+    def list_directory(self):
+        files = os.listdir(SERVER_DATA_PATH)
+        if files == []:
+            # empty
+            print("emptyy")
+        else:
+            # handle files list
+            pass
+        return EMPTY_DIRECTORY
 
     def run(self):
-        print('threadId: {} -- name: {}'.format(self.threadID, self.name))
-        self.handle_connection()
+        print ("Connection from : ", self.name)
+        msg = ''
+        while True:
+            data = self.client_socket.recv(16)
+            msg = data
+            decoded_message = data.decode()
+            parsed_decode_message = decoded_message.split(" ")
+            print("from client", decoded_message)
+            if parsed_decode_message[0] == COMMAND.LIST.value:
+                msg = self.list_directory().encode()
+            self.client_socket.send(msg)
+            if msg==b'bye':
+              break
+        print('we are closing connection to client {}'.format(self.name))
+        self.client_socket.close()
 
 class Server:
 
@@ -40,28 +63,25 @@ class Server:
         self.server_name = server_name
         self.server_port = server_port
         self.threadID = 0
-        # Create a TCP/IP socket
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def run_server(self):
-        print('STARTING] Server is starting...')
+        # Create a TCP/IP socket
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print('[STARTING] Server is starting...')
         self.server_socket.bind((self.server_name, self.server_port))
 
         # Listen for incoming connections
-        self.server_socket.listen(1)
-        print('[LISTENTING] Server is listening...')
+        self.server_socket.listen(10)
+        print('[LISTENING] Server is listening...')
 
         while True:
             connection, client_address = self.server_socket.accept()
-            try:
-                print('[NEW CONNECTION] ({}, {}) connected.\n'.format(client_address, self.server_port))
+            print('[NEW CONNECTION] ({}, {}) connected.\n'.format(client_address, self.server_port))
 
-                ServerThread(self.threadID, client_address, connection).run()
-                self.threadID += 1
+            self.threadID += 1
+            thr = ServerThread(self.threadID, 'thread-{}-{}'.format(self.threadID, client_address), connection)
+            thr.start()
 
-            finally:
-                # Clean up the connection
-                connection.close()
 
 server = Server('localhost', 3000)
 server.run_server()
