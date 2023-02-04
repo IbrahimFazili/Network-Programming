@@ -26,21 +26,30 @@ class Client:
 
         try:
             while True:
-                inpu = input("Enter something")
+                inpu = input("Enter something: ")
                 # Send data
-                print('sending {!r}'.format(inpu))
-                self.client_socket.sendall(inpu.encode())
+                print('{}sending {!r}'.format(len(inpu), inpu))
+                self.client_socket.sendall((str(len(inpu)) + "|" + inpu).encode())
 
                 # Look for the response
-                amount_received = 0
-                amount_expected = len(inpu)
+                data = self.client_socket.recv(16)
+                msg = data
+                decoded_message = data.decode()
+                parsed_decode_message = decoded_message.split("|")
+                print("from server, parsed:{}".format(parsed_decode_message))
+
+                amount_expected = int(parsed_decode_message[0])
+                amount_received = len(parsed_decode_message[1])
+                full_message = parsed_decode_message[1]
 
                 while amount_received < amount_expected:
                     data = self.client_socket.recv(16)
+                    full_message += data.decode()
                     amount_received += len(data)
-                    print('received {!r}'.format(data))
+            
+                print("full message ", full_message)
 
-                if inpu == "bye":
+                if inpu == COMMAND.EXIT.value:
                     break
 
         finally:

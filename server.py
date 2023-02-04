@@ -7,6 +7,8 @@ import os
 SERVER_DATA_PATH = "server_data/"
 EMPTY_DIRECTORY = "Server directory is empty!"
 
+# PROTOCCOL TO USE: MESSAGE LENGTH | FILE
+
 class COMMAND(Enum):
     LIST="LIST"
     PUSH="PUSH"
@@ -29,26 +31,40 @@ class ServerThread (threading.Thread):
         files = os.listdir(SERVER_DATA_PATH)
         if files == []:
             # empty
-            print("emptyy")
+            self.client_socket.send((str(len(EMPTY_DIRECTORY)) + "|" + EMPTY_DIRECTORY).encode())
         else:
             # handle files list
             pass
+            self.client_socket.send((str(len(EMPTY_DIRECTORY)) + "|" + EMPTY_DIRECTORY).encode())
         return EMPTY_DIRECTORY
 
     def run(self):
         print ("Connection from : ", self.name)
         msg = ''
         while True:
+
             data = self.client_socket.recv(16)
-            msg = data
             decoded_message = data.decode()
-            parsed_decode_message = decoded_message.split(" ")
-            print("from client", decoded_message)
-            if parsed_decode_message[0] == COMMAND.LIST.value:
-                msg = self.list_directory().encode()
-            self.client_socket.send(msg)
-            if msg==b'bye':
-              break
+            parsed_decode_message = decoded_message.split("|")
+            print("from client, parsed:{}".format(parsed_decode_message))
+
+            if parsed_decode_message[1] == COMMAND.LIST.value:
+                self.list_directory()
+            else:
+                amount_expected = int(parsed_decode_message[0])
+                amount_received = len(parsed_decode_message[1])
+                full_message = parsed_decode_message[1]
+
+                while amount_received < amount_expected:
+                    data = self.client_socket.recv(16)
+                    full_message += data.decode()
+                    amount_received += len(data)
+                
+                print("full message ", full_message)
+                self.client_socket.send((str(len(full_message)) + "|" + full_message).encode())
+
+                if full_message == COMMAND.EXIT.value:
+                    break
         print('we are closing connection to client {}'.format(self.name))
         self.client_socket.close()
 
