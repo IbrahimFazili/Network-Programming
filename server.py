@@ -6,6 +6,10 @@ import os
 
 SERVER_DATA_PATH = "server_data/"
 EMPTY_DIRECTORY = "Server directory is empty!"
+FILE_NOT_FOUND = "File not found!"
+FILE_DELETED = "The file {} deleted!"
+DISCONNECT_FROM_SERVER = "Disconnected from the server!"
+NOT_SUPPORTED = "This is not a supported command"
 
 # GENERAL PROTOCCOL TO USE: MESSAGE LENGTH | FILE
 # LIST PROTOCCOL (SUBJECT TO CHANGE): LENGTH | FILE1/FILE2/FILE3...
@@ -39,6 +43,21 @@ class ServerThread (threading.Thread):
             print("sending {}".format(str(len(full_message)) + "|" + full_message))
             self.client_socket.sendall((str(len(full_message)) + "|" + full_message).encode())
 
+    def delete_file(self, file_to_delete):
+        files = os.listdir(SERVER_DATA_PATH)
+        if files == []:
+            # empty
+            self.client_socket.send((str(len(EMPTY_DIRECTORY)) + "|" + EMPTY_DIRECTORY).encode())
+            return
+        if os.path.isfile(SERVER_DATA_PATH + file_to_delete):
+            # delete file
+            os.remove(SERVER_DATA_PATH + file_to_delete)
+            formatted_string = FILE_DELETED.format(file_to_delete)
+            self.client_socket.sendall((str(len(formatted_string)) + "|" + formatted_string).encode())
+        else:
+            # file doesn't exist
+            self.client_socket.sendall((str(len(FILE_NOT_FOUND)) + "|" + FILE_NOT_FOUND).encode())
+        
 
     def run(self):
         print ("Connection from : ", self.name)
@@ -47,25 +66,29 @@ class ServerThread (threading.Thread):
             data = self.client_socket.recv(16)
             decoded_message = data.decode()
             parsed_decode_message = decoded_message.split("|")
+            split_parsed_decode_message = parsed_decode_message[1].split(" ")
+            print(split_parsed_decode_message[0])
             print("initial packet from client, parsed:{}".format(parsed_decode_message))
+            amount_expected = int(parsed_decode_message[0])
+            amount_received = len(parsed_decode_message[1])
+            full_message = parsed_decode_message[1]
 
-            if parsed_decode_message[1] == COMMAND.LIST.value:
+            while amount_received < amount_expected:
+                data = self.client_socket.recv(16)
+                full_message += data.decode()
+                amount_received += len(data)
+                print("full message ", full_message)
+
+            if split_parsed_decode_message[0] == COMMAND.LIST.value:
                 self.list_directory()
+            elif split_parsed_decode_message[0] == COMMAND.DELETE.value:
+                self.delete_file(full_message.split(" ")[1])
+            elif split_parsed_decode_message[0] == COMMAND.EXIT.value:
+                self.client_socket.send((str(len(DISCONNECT_FROM_SERVER)) + "|" + DISCONNECT_FROM_SERVER).encode())
+                break
             else:
-                amount_expected = int(parsed_decode_message[0])
-                amount_received = len(parsed_decode_message[1])
-                full_message = parsed_decode_message[1]
+                self.client_socket.send((str(len(NOT_SUPPORTED)) + "|" + NOT_SUPPORTED).encode())
 
-                while amount_received < amount_expected:
-                    data = self.client_socket.recv(16)
-                    full_message += data.decode()
-                    amount_received += len(data)
-                    print("full message ", full_message)
-
-                self.client_socket.send((str(len(full_message)) + "|" + full_message).encode())
-
-                if full_message == COMMAND.EXIT.value:
-                    break
         print('we are closing connection to client {}'.format(self.name))
         self.client_socket.close()
 
