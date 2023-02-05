@@ -7,7 +7,8 @@ import os
 SERVER_DATA_PATH = "server_data/"
 EMPTY_DIRECTORY = "Server directory is empty!"
 
-# PROTOCCOL TO USE: MESSAGE LENGTH | FILE
+# GENERAL PROTOCCOL TO USE: MESSAGE LENGTH | FILE
+# LIST PROTOCCOL (SUBJECT TO CHANGE): LENGTH | FILE1/FILE2/FILE3...
 
 class COMMAND(Enum):
     LIST="LIST"
@@ -34,19 +35,19 @@ class ServerThread (threading.Thread):
             self.client_socket.send((str(len(EMPTY_DIRECTORY)) + "|" + EMPTY_DIRECTORY).encode())
         else:
             # handle files list
-            pass
-            self.client_socket.send((str(len(EMPTY_DIRECTORY)) + "|" + EMPTY_DIRECTORY).encode())
-        return EMPTY_DIRECTORY
+            full_message = "/".join(files)
+            print("sending {}".format(str(len(full_message)) + "|" + full_message))
+            self.client_socket.sendall((str(len(full_message)) + "|" + full_message).encode())
+
 
     def run(self):
         print ("Connection from : ", self.name)
-        msg = ''
         while True:
 
             data = self.client_socket.recv(16)
             decoded_message = data.decode()
             parsed_decode_message = decoded_message.split("|")
-            print("from client, parsed:{}".format(parsed_decode_message))
+            print("initial packet from client, parsed:{}".format(parsed_decode_message))
 
             if parsed_decode_message[1] == COMMAND.LIST.value:
                 self.list_directory()
@@ -59,8 +60,8 @@ class ServerThread (threading.Thread):
                     data = self.client_socket.recv(16)
                     full_message += data.decode()
                     amount_received += len(data)
-                
-                print("full message ", full_message)
+                    print("full message ", full_message)
+
                 self.client_socket.send((str(len(full_message)) + "|" + full_message).encode())
 
                 if full_message == COMMAND.EXIT.value:
