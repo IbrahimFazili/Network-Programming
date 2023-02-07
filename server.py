@@ -11,6 +11,7 @@ FILE_DELETED = "The file {} deleted!"
 DISCONNECT_FROM_SERVER = "Disconnected from the server!"
 NOT_SUPPORTED = "This is not a supported command"
 
+BUFFER_SIZE = 1024
 # GENERAL PROTOCCOL TO USE: MESSAGE LENGTH | FILE
 # LIST PROTOCCOL (SUBJECT TO CHANGE): LENGTH | FILE1/FILE2/FILE3...
 
@@ -58,12 +59,19 @@ class ServerThread (threading.Thread):
             # file doesn't exist
             self.client_socket.sendall((str(len(FILE_NOT_FOUND)) + "|" + FILE_NOT_FOUND).encode())
         
+    def create_file(self, filecontents:str):
+        split_filecontents = filecontents.split("/")
+        file_name, file_contents = split_filecontents
+        print("filename: {} filecontents: {}".format(file_name, file_contents))
+        file_writer = open(SERVER_DATA_PATH + file_name, "wb")
+        file_writer.write(file_contents.encode('utf-8'))
 
     def run(self):
         print ("Connection from : ", self.name)
         while True:
 
-            data = self.client_socket.recv(16)
+            data = self.client_socket.recv(BUFFER_SIZE)
+            print(data)
             decoded_message = data.decode()
             parsed_decode_message = decoded_message.split("|")
             split_parsed_decode_message = parsed_decode_message[1].split(" ")
@@ -74,7 +82,7 @@ class ServerThread (threading.Thread):
             full_message = parsed_decode_message[1]
 
             while amount_received < amount_expected:
-                data = self.client_socket.recv(16)
+                data = self.client_socket.recv(BUFFER_SIZE)
                 full_message += data.decode()
                 amount_received += len(data)
                 print("full message ", full_message)
@@ -83,6 +91,9 @@ class ServerThread (threading.Thread):
                 self.list_directory()
             elif split_parsed_decode_message[0] == COMMAND.DELETE.value:
                 self.delete_file(full_message.split(" ")[1])
+            elif split_parsed_decode_message[0] == COMMAND.PUSH.value:
+                file_data = " ".join(full_message.split(" ")[1:])
+                self.create_file(file_data)
             elif split_parsed_decode_message[0] == COMMAND.EXIT.value:
                 self.client_socket.send((str(len(DISCONNECT_FROM_SERVER)) + "|" + DISCONNECT_FROM_SERVER).encode())
                 break
