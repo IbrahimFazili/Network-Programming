@@ -90,10 +90,33 @@ class ServerThread (threading.Thread):
             if split_parsed_decode_message[0] == COMMAND.LIST.value:
                 self.list_directory()
             elif split_parsed_decode_message[0] == COMMAND.DELETE.value:
-                self.delete_file(full_message.split(" ")[1])
+                # receive the file
+                file_data = self.client_socket.recv(BUFFER_SIZE).decode()
+                print(file_data)
+                parsed_file_data = file_data.split("|")
+                amount_expected = int(parsed_file_data[0])
+                amount_received = len(parsed_file_data[1])
+                full_message_data = parsed_file_data[1]
+                while amount_received < amount_expected:
+                    data = self.client_socket.recv(BUFFER_SIZE)
+                    full_message_data += data.decode()
+                    amount_received += len(data)
+                print("full message ", full_message_data)
+                self.delete_file(full_message_data)
             elif split_parsed_decode_message[0] == COMMAND.PUSH.value:
-                file_data = " ".join(full_message.split(" ")[1:])
-                self.create_file(file_data)
+                # receive the file
+                file_data = self.client_socket.recv(BUFFER_SIZE).decode()
+                print(file_data)
+                parsed_file_data = file_data.split("|")
+                amount_expected = int(parsed_file_data[0])
+                amount_received = len(parsed_file_data[1])
+                full_message_data = parsed_file_data[1]
+                while amount_received < amount_expected:
+                    data = self.client_socket.recv(BUFFER_SIZE)
+                    full_message_data += data.decode()
+                    amount_received += len(data)
+                print("full message ", full_message_data)
+                self.create_file(full_message_data)
             elif split_parsed_decode_message[0] == COMMAND.EXIT.value:
                 self.client_socket.send((str(len(DISCONNECT_FROM_SERVER)) + "|" + DISCONNECT_FROM_SERVER).encode())
                 break

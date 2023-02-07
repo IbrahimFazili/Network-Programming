@@ -79,16 +79,21 @@ class Client:
                 print('sending {}{!r}'.format(length_request_message, request_message))
 
                 split_request_message = request_message.split(" ")
-                if split_request_message[0] == COMMAND.LIST.value:
-                    self.client_socket.sendall((str(length_request_message) + "|" + request_message).encode())
+                command = split_request_message[0]
+                if command == COMMAND.LIST.value:
+                    self.client_socket.sendall((str(len(command)) + "|" + command).encode())
                     self.handle_list_response()
-                elif split_request_message[0] == COMMAND.DELETE.value:
-                    self.client_socket.sendall((str(length_request_message) + "|" + request_message).encode())
+                elif command == COMMAND.DELETE.value:
+                    self.client_socket.sendall((str(len(command)) + "|" + command).encode())
+                    file_to_delete = split_request_message[1]
+                    length_file_to_delete = len(file_to_delete)
+                    self.client_socket.sendall((str(length_file_to_delete) + "|" + file_to_delete).encode())
                     self.handle_delete_response()
-                elif split_request_message[0] == COMMAND.PUSH.value:
+                elif command == COMMAND.PUSH.value:
+                    self.client_socket.sendall((str(len(command)) + "|" + command).encode())
                     bytes_to_send = self.get_file_bytes(split_request_message[1])
                     # total bytes|PUSH filename/content
-                    formatted_request = ("PUSH " + split_request_message[1] + "/").encode() + bytes_to_send
+                    formatted_request = (split_request_message[1] + "/").encode() + bytes_to_send
                     self.client_socket.sendall(((str(len(formatted_request)) + "|").encode() + formatted_request)) 
                 else:
                     self.client_socket.sendall((str(length_request_message) + "|" + request_message).encode())
