@@ -1,6 +1,7 @@
 from enum import Enum
 import socket
 import sys
+import time
 
 CLIENT_DATA_PATH = "client_data/"
 
@@ -44,7 +45,7 @@ class Client:
         for file in files:
             print(file)
 
-    def handle_delete_response(self):
+    def print_server_response(self):
         data = self.client_socket.recv(BUFFER_SIZE)
         msg = data
         decoded_message = data.decode()
@@ -85,16 +86,26 @@ class Client:
                     self.handle_list_response()
                 elif command == COMMAND.DELETE.value:
                     self.client_socket.sendall((str(len(command)) + "|" + command).encode())
+                    time.sleep(0.5)
                     file_to_delete = split_request_message[1]
                     length_file_to_delete = len(file_to_delete)
                     self.client_socket.sendall((str(length_file_to_delete) + "|" + file_to_delete).encode())
-                    self.handle_delete_response()
+                    self.print_server_response()
                 elif command == COMMAND.PUSH.value:
-                    self.client_socket.sendall((str(len(command)) + "|" + command).encode())
                     bytes_to_send = self.get_file_bytes(split_request_message[1])
                     # total bytes|PUSH filename/content
                     formatted_request = (split_request_message[1] + "/").encode() + bytes_to_send
-                    self.client_socket.sendall(((str(len(formatted_request)) + "|").encode() + formatted_request)) 
+                    self.client_socket.sendall((str(len(command)) + "|" + command + "|" + str(len(formatted_request))).encode())
+                    time.sleep(0.5)
+                    self.client_socket.sendall(formatted_request) 
+                    self.print_server_response()
+                elif command == COMMAND.OVERWRITE.value:
+                    self.client_socket.sendall((str(len(command)) + "|" + command).encode())
+                    time.sleep(0.5)
+                    file_to_overwrite = split_request_message[1]
+                    length_file_to_overwrite = len(file_to_overwrite)
+                    self.client_socket.sendall((str(length_file_to_overwrite) + "|" + file_to_overwrite).encode())
+                    self.print_server_response()
                 else:
                     self.client_socket.sendall((str(length_request_message) + "|" + request_message).encode())
                     # Look for the response

@@ -10,6 +10,9 @@ FILE_NOT_FOUND = "File not found!"
 FILE_DELETED = "The file {} deleted!"
 DISCONNECT_FROM_SERVER = "Disconnected from the server!"
 NOT_SUPPORTED = "This is not a supported command"
+PUSH_CONFIRMATION = "Received the file {}!"
+OVERWRITTEN_CONFIRMATION = "The file {} overwritten!"
+OVERWRITTEN_TEXT = "Hi! You're text file has been overwritten with this sentence!"
 
 BUFFER_SIZE = 1024
 # GENERAL PROTOCCOL TO USE: MESSAGE LENGTH | FILE
@@ -59,12 +62,23 @@ class ServerThread (threading.Thread):
             # file doesn't exist
             self.client_socket.sendall((str(len(FILE_NOT_FOUND)) + "|" + FILE_NOT_FOUND).encode())
         
-    def create_file(self, filecontents:str):
-        split_filecontents = filecontents.split("/")
-        file_name, file_contents = split_filecontents
-        print("filename: {} filecontents: {}".format(file_name, file_contents))
+    def create_file(self, filecontents: bytes):
+        split_filecontents = filecontents.split(b"/")
+        file_name = split_filecontents[0].decode()
+        file_contents = b"/".join(split_filecontents[1:])
         file_writer = open(SERVER_DATA_PATH + file_name, "wb")
-        file_writer.write(file_contents.encode('utf-8'))
+        file_writer.write(file_contents)
+        formatted_string = PUSH_CONFIRMATION.format(file_name)
+        self.client_socket.sendall((str(len(formatted_string)) + "|" + formatted_string).encode())
+
+    def overwrite_file(self, file_to_delete):
+        if os.path.isfile(SERVER_DATA_PATH + file_to_delete):
+            file_writer = open(SERVER_DATA_PATH + file_to_delete, "wb")
+            file_writer.write(OVERWRITTEN_TEXT.encode())
+            formatted_string = OVERWRITTEN_CONFIRMATION.format(file_to_delete)
+            self.client_socket.sendall((str(len(formatted_string)) + "|" + formatted_string).encode())
+        else:
+            self.client_socket.sendall((str(len(FILE_NOT_FOUND)) + "|" + FILE_NOT_FOUND).encode())
 
     def run(self):
         print ("Connection from : ", self.name)
@@ -75,8 +89,6 @@ class ServerThread (threading.Thread):
             decoded_message = data.decode()
             parsed_decode_message = decoded_message.split("|")
             split_parsed_decode_message = parsed_decode_message[1].split(" ")
-            print(split_parsed_decode_message[0])
-            print("initial packet from client, parsed:{}".format(parsed_decode_message))
             amount_expected = int(parsed_decode_message[0])
             amount_received = len(parsed_decode_message[1])
             full_message = parsed_decode_message[1]
@@ -85,14 +97,12 @@ class ServerThread (threading.Thread):
                 data = self.client_socket.recv(BUFFER_SIZE)
                 full_message += data.decode()
                 amount_received += len(data)
-                print("full message ", full_message)
 
             if split_parsed_decode_message[0] == COMMAND.LIST.value:
                 self.list_directory()
             elif split_parsed_decode_message[0] == COMMAND.DELETE.value:
                 # receive the file
                 file_data = self.client_socket.recv(BUFFER_SIZE).decode()
-                print(file_data)
                 parsed_file_data = file_data.split("|")
                 amount_expected = int(parsed_file_data[0])
                 amount_received = len(parsed_file_data[1])
@@ -101,12 +111,20 @@ class ServerThread (threading.Thread):
                     data = self.client_socket.recv(BUFFER_SIZE)
                     full_message_data += data.decode()
                     amount_received += len(data)
-                print("full message ", full_message_data)
                 self.delete_file(full_message_data)
             elif split_parsed_decode_message[0] == COMMAND.PUSH.value:
                 # receive the file
+                file_data = self.client_socket.recv(BUFFER_SIZE)
+                amount_expected = int(parsed_decode_message[-1])
+                amount_received = len(file_data)
+                full_message_data = file_data
+                while amount_received < amount_expected:
+                    data = self.client_socket.recv(BUFFER_SIZE)
+                    full_message_data += data
+                    amount_received += len(data)
+                self.create_file(full_message_data)
+            elif split_parsed_decode_message[0] == COMMAND.OVERWRITE.value:
                 file_data = self.client_socket.recv(BUFFER_SIZE).decode()
-                print(file_data)
                 parsed_file_data = file_data.split("|")
                 amount_expected = int(parsed_file_data[0])
                 amount_received = len(parsed_file_data[1])
@@ -115,8 +133,7 @@ class ServerThread (threading.Thread):
                     data = self.client_socket.recv(BUFFER_SIZE)
                     full_message_data += data.decode()
                     amount_received += len(data)
-                print("full message ", full_message_data)
-                self.create_file(full_message_data)
+                self.overwrite_file(full_message_data)
             elif split_parsed_decode_message[0] == COMMAND.EXIT.value:
                 self.client_socket.send((str(len(DISCONNECT_FROM_SERVER)) + "|" + DISCONNECT_FROM_SERVER).encode())
                 break
