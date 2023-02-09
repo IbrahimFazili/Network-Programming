@@ -15,8 +15,8 @@ OVERWRITTEN_CONFIRMATION = "The file {} overwritten!"
 OVERWRITTEN_TEXT = "Hi! You're text file has been overwritten with this sentence!"
 
 BUFFER_SIZE = 1024
-# GENERAL PROTOCCOL TO USE: MESSAGE LENGTH | FILE
-# LIST PROTOCCOL (SUBJECT TO CHANGE): LENGTH | FILE1/FILE2/FILE3...
+# GENERAL HEADER PROTOCCOL TO USE: LENGTH | COMMAND | FILE_LENGTH | FILE_NAME
+# CONTENT PAYLOAD: FILE BYTES
 
 class COMMAND(Enum):
     LIST="LIST"
@@ -37,6 +37,11 @@ class ServerThread (threading.Thread):
         self.client_socket = client_socket
 
     def list_directory(self):
+        """
+        Checks the server directory to see if there are any files when the user inputs LIST
+        If there are files, it sends them as total bytes|file1|file2|file3...fileN
+        Otherwise Empty directory message is sent
+        """
         files = os.listdir(SERVER_DATA_PATH)
         if files == []:
             # empty
@@ -44,10 +49,16 @@ class ServerThread (threading.Thread):
         else:
             # handle files list
             full_message = "/".join(files)
-            print("sending {}".format(str(len(full_message)) + "|" + full_message))
             self.client_socket.sendall((str(len(full_message)) + "|" + full_message).encode())
 
     def delete_file(self, file_to_delete):
+        """
+        Given the filename, attempts to delete that file in the server_data folder.
+
+        Parameters
+        ----------
+        file_to_delete: str
+        """
         files = os.listdir(SERVER_DATA_PATH)
         if files == []:
             # empty
@@ -62,16 +73,28 @@ class ServerThread (threading.Thread):
             # file doesn't exist
             self.client_socket.sendall((str(len(FILE_NOT_FOUND)) + "|" + FILE_NOT_FOUND).encode())
         
-    def create_file(self, filecontents: bytes):
-        split_filecontents = filecontents.split(b"/")
-        file_name = split_filecontents[0].decode()
-        file_contents = b"/".join(split_filecontents[1:])
+    def create_file(self, file_name:str, filecontents: bytes):
+        """
+        Creates the given filename in the server_data and write its content
+
+        Parameters
+        ----------
+        file_name: str
+        filecontents: bytes
+        """
         file_writer = open(SERVER_DATA_PATH + file_name, "wb")
-        file_writer.write(file_contents)
+        file_writer.write(filecontents)
         formatted_string = PUSH_CONFIRMATION.format(file_name)
         self.client_socket.sendall((str(len(formatted_string)) + "|" + formatted_string).encode())
 
     def overwrite_file(self, file_to_delete):
+        """
+        Overwrites the given txt file with a hardcoded text value if it exists
+
+        Parameters
+        ----------
+        file_to_delete:str
+        """
         if os.path.isfile(SERVER_DATA_PATH + file_to_delete):
             file_writer = open(SERVER_DATA_PATH + file_to_delete, "wb")
             file_writer.write(OVERWRITTEN_TEXT.encode())
@@ -81,11 +104,11 @@ class ServerThread (threading.Thread):
             self.client_socket.sendall((str(len(FILE_NOT_FOUND)) + "|" + FILE_NOT_FOUND).encode())
 
     def run(self):
-        print ("Connection from : ", self.name)
-        while True:
 
+        while True:
+            # parse and receive the header protoccol to find which command has been issued
+            # by the user 
             data = self.client_socket.recv(BUFFER_SIZE)
-            print(data)
             decoded_message = data.decode()
             parsed_decode_message = decoded_message.split("|")
             split_parsed_decode_message = parsed_decode_message[1].split(" ")
@@ -115,32 +138,22 @@ class ServerThread (threading.Thread):
             elif split_parsed_decode_message[0] == COMMAND.PUSH.value:
                 # receive the file
                 file_data = self.client_socket.recv(BUFFER_SIZE)
-                amount_expected = int(parsed_decode_message[-1])
+                amount_expected = int(parsed_decode_message[-2])
                 amount_received = len(file_data)
                 full_message_data = file_data
                 while amount_received < amount_expected:
                     data = self.client_socket.recv(BUFFER_SIZE)
                     full_message_data += data
                     amount_received += len(data)
-                self.create_file(full_message_data)
+                self.create_file(parsed_decode_message[-1], full_message_data)
             elif split_parsed_decode_message[0] == COMMAND.OVERWRITE.value:
-                file_data = self.client_socket.recv(BUFFER_SIZE).decode()
-                parsed_file_data = file_data.split("|")
-                amount_expected = int(parsed_file_data[0])
-                amount_received = len(parsed_file_data[1])
-                full_message_data = parsed_file_data[1]
-                while amount_received < amount_expected:
-                    data = self.client_socket.recv(BUFFER_SIZE)
-                    full_message_data += data.decode()
-                    amount_received += len(data)
-                self.overwrite_file(full_message_data)
+                self.overwrite_file(parsed_decode_message[-1])
             elif split_parsed_decode_message[0] == COMMAND.EXIT.value:
                 self.client_socket.send((str(len(DISCONNECT_FROM_SERVER)) + "|" + DISCONNECT_FROM_SERVER).encode())
                 break
             else:
                 self.client_socket.send((str(len(NOT_SUPPORTED)) + "|" + NOT_SUPPORTED).encode())
 
-        print('we are closing connection to client {}'.format(self.name))
         self.client_socket.close()
 
 class Server:
@@ -167,7 +180,7 @@ class Server:
 
         while True:
             connection, client_address = self.server_socket.accept()
-            print('[NEW CONNECTION] ({}, {}) connected.\n'.format(client_address, self.server_port))
+            print('[NEW CONNECTION] ({}, {}) connected.\n'.format(client_address[0], client_address[1]))
 
             self.threadID += 1
             thr = ServerThread(self.threadID, 'thread-{}-{}'.format(self.threadID, client_address), connection)
