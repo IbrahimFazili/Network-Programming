@@ -186,6 +186,6 @@ class Server:
             thr = ServerThread(self.threadID, 'thread-{}-{}'.format(self.threadID, client_address), connection)
             thr.start()
 
-
-server = Server('localhost', 3000)
+server_host = input("Enter server host: ")
+server = Server(server_host, 3000)
 server.run_server()

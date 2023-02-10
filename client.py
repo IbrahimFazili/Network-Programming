@@ -122,10 +122,12 @@ class Client:
                     self.print_server_response()
                 elif command == COMMAND.EXIT.value:
                     self.client_socket.sendall((str(len(command)) + "|" + command).encode())
+                    self.print_server_response()
                     break
 
         finally:
             self.client_socket.close()
 
-client = Client('localhost', 3000)
+server_host = input("Enter the server's host: ")
+client = Client(server_host, 3000)
 client.start_client()
